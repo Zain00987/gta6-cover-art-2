@@ -1,13 +1,15 @@
-// Neon Heist Canvas — drawing engine (rebuilt 2026-11-20).
+// Neon Heist Canvas — drawing engine (rebuilt 2026-11-20, second recorded pass).
 // Turns photos, a layout and colour grades into GTA-style poster cover art on a
 // canvas. Every panel, gradient, sun, palm, skyline, halftone dot and letter is drawn
 // here from scratch — no Rockstar logo, artwork or font is used anywhere. Panels are
-// polygons: diagonal seams, staggered strips and, new in this rebuild, a radial burst
+// polygons: diagonal seams, staggered strips, a chevron band, and a radial burst
 // (a central hexagon hub with six wedges radiating out), so the composition reads
-// like a comic-book cover instead of a grid. The sun, palms and neon glow are only
+// like a comic-book cover instead of a grid. The burst hub is a sun medallion, never
+// a photo, so no face is ever cropped into it. The sun, palms and neon glow are only
 // ever drawn into SKY panels (empty panels) — never over a photo — so the subject's
-// face is never fought by an overlay. Photos can be cover-fit or shown whole
-// (fit: 'whole' draws the full photo over a sky wash), so any photo works.
+// face is never fought by an overlay. Photos can be cover-fit (with a top / centre /
+// bottom anchor, so faces survive wide panels) or shown whole (fit: 'whole' draws the
+// full photo over a sky wash), so any photo works.
 
 export const GRADES = {
   sunset: {
@@ -52,6 +54,7 @@ export const LAYOUTS = {
   quad: { label: 'Staggered quad', panels: 4 },
   triptych: { label: 'Triptych', panels: 3 },
   burst: { label: 'Radial burst', panels: 7 },
+  chevron: { label: 'Chevron', panels: 3 },
 };
 
 /** Deterministic pseudo-random stream from a seed, so skylines are stable per panel. */
@@ -88,7 +91,8 @@ function normAngle(a) {
  * { poly: [[x, y], ...], rect: {x, y, w, h} } where rect is the bounding box
  * the photo cover-fits into. Order is draw order (later panels overlap earlier).
  * The burst layout is a central hexagon hub (drawn last) with six wedges radiating
- * out to the canvas edges, one wedge per 60-degree sector.
+ * out to the canvas edges, one wedge per 60-degree sector. The chevron layout is a
+ * wide top band with a V-shaped bottom edge over two tall bottom panels.
  */
 export function layoutPanels(layout, w, h) {
   const P = (fracs) => {
@@ -178,6 +182,13 @@ export function layoutPanels(layout, w, h) {
       });
       return panels;
     }
+    case 'chevron': { // wide top band with a V bottom edge, two tall panels below
+      return [
+        P([[0, 0], [1, 0], [1, 0.30], [0.5, 0.52], [0, 0.30]]),
+        P([[0, 0.30], [0.5, 0.52], [0.5, 1], [0, 1]]),
+        P([[0.5, 0.52], [1, 0.30], [1, 1], [0.5, 1]]),
+      ];
+    }
     default:
       return [P([[0, 0], [1, 0], [1, 1], [0, 1]])];
   }
@@ -194,23 +205,19 @@ export function pointInPoly(x, y, poly) {
   return inside;
 }
 
-/** Clamps a panel's pan offset so the zoomed photo still covers its rectangle. */
-function clampPan(rect, dw, dh, ox, oy) {
-  const maxX = Math.max(0, (dw - rect.w) / 2);
-  const maxY = Math.max(0, (dh - rect.h) / 2);
-  return {
-    ox: Math.max(-maxX, Math.min(maxX, ox)),
-    oy: Math.max(-maxY, Math.min(maxY, oy)),
-  };
-}
-
 /** Draws one photo into its panel rectangle: cover-fit, or whole-photo over a sky wash. */
 function drawPhoto(ctx, rect, panel, grade) {
   const img = panel.img;
   if (!img) return;
   const zoom = panel.zoom || 1;
   ctx.save();
-  if (grade.mono) ctx.filter = 'grayscale(1) contrast(1.12) brightness(1.06)';
+  // Colour pop: pull the photo slightly toward the poster's palette (desaturate a
+  // touch, lift contrast) so any snapshot reads as part of the cover, not pasted on.
+  // Noir keeps its grayscale treatment on top.
+  const filters = [];
+  if (grade.mono) filters.push('grayscale(1) contrast(1.12) brightness(1.06)');
+  if (panel.pop !== false) filters.push('saturate(0.82) contrast(1.04)');
+  if (filters.length) ctx.filter = filters.join(' ');
   if (panel.flip) {
     ctx.translate(rect.x + rect.w / 2, 0);
     ctx.scale(-1, 1);
@@ -233,12 +240,30 @@ function drawPhoto(ctx, rect, panel, grade) {
     ctx.shadowOffsetY = Math.max(4, rect.h * 0.01);
     ctx.drawImage(img, dx, dy, dw, dh);
   } else {
+    // Cover-fit, anchored so the subject survives wide or short panels: 'top' pins
+    // the photo's top edge to the panel (faces live at the top of most photos),
+    // 'bottom' pins the bottom edge, 'center' is the classic centred crop. The pan
+    // offset is clamped to the anchor's own range, so dragging can never open a gap.
     const base = Math.max(rect.w / img.naturalWidth, rect.h / img.naturalHeight) * zoom;
     const dw = img.naturalWidth * base;
     const dh = img.naturalHeight * base;
-    const { ox, oy } = clampPan(rect, dw, dh, panel.ox || 0, panel.oy || 0);
+    const maxX = Math.max(0, (dw - rect.w) / 2);
+    const ox = Math.max(-maxX, Math.min(maxX, panel.ox || 0));
+    const overY = Math.max(0, dh - rect.h);
+    let oy = panel.oy || 0;
+    let dy;
+    if (panel.anchor === 'top') {
+      oy = Math.max(-overY, Math.min(0, oy));
+      dy = rect.y + oy;
+    } else if (panel.anchor === 'bottom') {
+      oy = Math.max(0, Math.min(overY, oy));
+      dy = rect.y + rect.h - dh + oy;
+    } else {
+      const maxY = overY / 2;
+      oy = Math.max(-maxY, Math.min(maxY, oy));
+      dy = rect.y + (rect.h - dh) / 2 + oy;
+    }
     const dx = rect.x + (rect.w - dw) / 2 + ox;
-    const dy = rect.y + (rect.h - dh) / 2 + oy;
     ctx.drawImage(img, dx, dy, dw, dh);
   }
   ctx.restore();
@@ -311,10 +336,10 @@ function drawPalm(ctx, x, baseY, s, color, lean) {
   ctx.restore();
 }
 
-/** A dark skyline silhouette with a few lit windows along a panel's foot. */
-function drawSkyline(ctx, rect, seed, grade) {
+/** A dark skyline silhouette with a few lit windows along a given foot line. */
+function drawSkyline(ctx, rect, seed, grade, footY) {
   const rand = seeded(seed);
-  const baseY = rect.y + rect.h;
+  const baseY = footY ?? rect.y + rect.h;
   ctx.fillStyle = 'rgba(10, 4, 18, 0.82)';
   let x = rect.x;
   while (x < rect.x + rect.w) {
@@ -354,18 +379,70 @@ function drawStars(ctx, rect, seed) {
   ctx.restore();
 }
 
-/** Gradient sky + sun + skyline + palms: only ever painted into an EMPTY panel. */
+/** Soft horizontal cloud bands, low alpha, deterministic per panel. In a mono
+ * (noir) sky the bands are halved again: full-strength white ellipses read as flat
+ * grey discs against the black sky instead of as clouds. */
+function drawClouds(ctx, rect, seed, color, mono) {
+  const rand = seeded(seed);
+  const base = mono ? 0.05 : 0.10;
+  ctx.save();
+  for (let i = 0; i < 3; i++) {
+    const cy = rect.y + rect.h * (0.10 + i * 0.11 + rand() * 0.03);
+    const cx = rect.x + rect.w * (0.15 + rand() * 0.55);
+    const cw = rect.w * (0.24 + rand() * 0.22);
+    const ch = Math.max(4, rect.h * (0.012 + rand() * 0.012));
+    ctx.fillStyle = color;
+    ctx.globalAlpha = base + rand() * (mono ? 0.04 : 0.08);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, cw / 2, ch, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * Gradient sky + clouds + sun + sea with a sun reflection + skyline + palms: only
+ * ever painted into an EMPTY panel. The sea band at the foot (with the sun's
+ * reflection streak running down it) makes the panel read as a bay at dusk instead
+ * of an empty gradient — it fills tall sky panels like the triptych middle instead
+ * of leaving them bare.
+ */
 function drawSkyPanel(ctx, panel, rect, grade, seed) {
-  const sky = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.h);
+  const seaY = rect.y + rect.h * 0.78;
+  const sky = ctx.createLinearGradient(rect.x, rect.y, rect.x, seaY);
   sky.addColorStop(0, grade.sky[0]);
   sky.addColorStop(0.55, grade.sky[1]);
   sky.addColorStop(1, grade.sky[2]);
   ctx.fillStyle = sky;
-  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.fillRect(rect.x, rect.y, rect.w, seaY - rect.y);
   if (grade.mono) drawStars(ctx, rect, seed + 7);
+  drawClouds(ctx, rect, seed + 13, grade.mono ? '#ffffff' : grade.sunCore, grade.mono);
   const r = Math.min(rect.w, rect.h) * 0.20;
-  drawSun(ctx, rect.x + rect.w * 0.68, rect.y + rect.h * 0.30, r, grade);
-  drawSkyline(ctx, rect, seed, grade);
+  const sunX = rect.x + rect.w * 0.68;
+  const sunY = rect.y + rect.h * 0.30;
+  drawSun(ctx, sunX, sunY, r, grade);
+  // Sea: a dark band with the sun's reflection streak shimmering down it.
+  const sea = ctx.createLinearGradient(rect.x, seaY, rect.x, rect.y + rect.h);
+  sea.addColorStop(0, grade.sky[2]);
+  sea.addColorStop(1, grade.frame);
+  ctx.fillStyle = sea;
+  ctx.fillRect(rect.x, seaY, rect.w, rect.y + rect.h - seaY);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(rect.x, seaY, rect.w, rect.y + rect.h - seaY);
+  ctx.clip();
+  const srand = seeded(seed + 53);
+  for (let i = 0; i < 7; i++) {
+    const y = seaY + ((rect.y + rect.h - seaY) * (i + 0.5)) / 7;
+    const wob = (srand() - 0.5) * rect.w * 0.03;
+    const half = rect.w * (0.03 + i * 0.012);
+    ctx.fillStyle = grade.sun;
+    ctx.globalAlpha = Math.max(0.05, 0.34 - i * 0.045);
+    ctx.fillRect(sunX + wob - half, y, half * 2, Math.max(2, rect.h * 0.008));
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  drawSkyline(ctx, rect, seed, grade, seaY + 2);
   const rand = seeded(seed + 31);
   const sil = 'rgba(8, 3, 16, 0.92)';
   const n = Math.max(2, Math.round(rect.w / 260));
@@ -374,6 +451,42 @@ function drawSkyPanel(ctx, panel, rect, grade, seed) {
     const ps = rect.h * (0.16 + rand() * 0.10);
     drawPalm(ctx, px, rect.y + rect.h + 2, ps, sil, (rand() - 0.5) * 0.5);
   }
+}
+
+/**
+ * The burst hub as a sun medallion: radial sky, faint rays, one big striped sun.
+ * No photo ever lands here, so the hub can never show a cropped torso.
+ */
+function drawMedallion(ctx, panel, rect, grade, seed) {
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const sky = ctx.createRadialGradient(cx, cy, 4, cx, cy, Math.max(rect.w, rect.h) * 0.75);
+  sky.addColorStop(0, grade.sky[0]);
+  sky.addColorStop(0.6, grade.sky[1]);
+  sky.addColorStop(1, grade.sky[2]);
+  ctx.fillStyle = sky;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  // Faint sun rays fanning out of the centre.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 12; i++) {
+    ctx.save();
+    ctx.rotate((i * Math.PI) / 6);
+    ctx.globalAlpha = 0.05;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.max(rect.w, rect.h), -rect.h * 0.03);
+    ctx.lineTo(Math.max(rect.w, rect.h), rect.h * 0.03);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  if (grade.mono) drawStars(ctx, rect, seed + 7);
+  const r = Math.min(rect.w, rect.h) * 0.30;
+  drawSun(ctx, cx, cy, r, grade);
 }
 
 /** A faint halftone dot field across the top of a panel, fading downward. */
@@ -418,6 +531,14 @@ function getGrainTile() {
   c.putImageData(img, 0, 0);
   grainTile = t;
   return t;
+}
+
+/** Faint retro scanlines across the whole cover (1px lines, every 4px). */
+function drawScanlines(ctx, w, h) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.035)';
+  for (let y = 0; y < h; y += 4) ctx.fillRect(0, y, w, 1);
+  ctx.restore();
 }
 
 /** The circular stamp badge: double ring, two text lines, one tiny palm.
@@ -505,7 +626,14 @@ function drawType(ctx, w, h, state, grade) {
       ctx.fillStyle = dark;
       ctx.fillText(title, 0, size * 0.02);
     } else {
-      // First pass: an accent-coloured neon glow behind the letters, so the title
+      // First: a solid neon echo of the title, offset down-right — the GTA poster
+      // trick that makes the letters read as a lit sign rather than flat type.
+      ctx.save();
+      ctx.fillStyle = grade.accent;
+      ctx.globalAlpha = 0.85;
+      ctx.fillText(title, size * 0.045, size * 0.055);
+      ctx.restore();
+      // Second: an accent-coloured neon glow behind the letters, so the title
       // lifts off busy photos even where the outline alone would not.
       ctx.save();
       ctx.shadowColor = grade.accent;
@@ -514,7 +642,7 @@ function drawType(ctx, w, h, state, grade) {
       ctx.fillStyle = state.captionColor || grade.caption;
       ctx.fillText(title, 0, 0);
       ctx.restore();
-      // Second pass: dark outline + drop shadow + crisp fill.
+      // Third: dark outline + drop shadow + crisp fill.
       ctx.shadowColor = 'rgba(0,0,0,0.55)';
       ctx.shadowBlur = size * 0.18;
       ctx.shadowOffsetY = size * 0.04;
@@ -584,8 +712,9 @@ function drawType(ctx, w, h, state, grade) {
 
 /**
  * Draws the whole cover onto `canvas` from `state`:
- * { panels: [{img, zoom, ox, oy, flip, fit, grade}], layout, grade, caption, subtitle,
- *   tagline, titlePos, titleScale, captionColor, outline, badge, grain }
+ * { panels: [{img, zoom, ox, oy, flip, fit, grade, anchor, pop}], layout, grade,
+ *   caption, subtitle, tagline, titlePos, titleScale, captionColor, outline, badge,
+ *   grain, scanlines }
  */
 export function drawCover(canvas, state) {
   const ctx = canvas.getContext('2d');
@@ -593,36 +722,43 @@ export function drawCover(canvas, state) {
   const h = canvas.height;
   const grade = GRADES[state.grade] || GRADES.vice;
   const panels = layoutPanels(state.layout || 'hero', w, h);
+  const isBurst = state.layout === 'burst';
   ctx.fillStyle = grade.frame;
   ctx.fillRect(0, 0, w, h);
   const heroIndex = panels.reduce((best, p, i) => (p.rect.w * p.rect.h > panels[best].rect.w * panels[best].rect.h ? i : best), 0);
   panels.forEach((panel, i) => {
     const pstate = (state.panels && state.panels[i]) || {};
     const pgrade = (pstate.grade && pstate.grade !== 'auto' && GRADES[pstate.grade]) ? GRADES[pstate.grade] : grade;
+    const isHub = isBurst && i === panels.length - 1;
     ctx.save();
     tracePoly(ctx, panel.poly);
     ctx.clip();
-    if (pstate.img) {
-      drawPhoto(ctx, panel.rect, pstate, pgrade);
+    if (isHub) {
+      // The burst hub is always the sun medallion: no photo, no wash, no shade.
+      drawMedallion(ctx, panel, panel.rect, pgrade, 1000 + i * 77);
     } else {
-      drawSkyPanel(ctx, panel, panel.rect, pgrade, 1000 + i * 77);
+      if (pstate.img) {
+        drawPhoto(ctx, panel.rect, pstate, pgrade);
+      } else {
+        drawSkyPanel(ctx, panel, panel.rect, pgrade, 1000 + i * 77);
+      }
+      // Colour wash (per-panel grade) + halftone + bottom shade.
+      const wash = ctx.createLinearGradient(panel.rect.x, panel.rect.y, panel.rect.x, panel.rect.y + panel.rect.h);
+      wash.addColorStop(0, pgrade.sky[0]);
+      wash.addColorStop(1, pgrade.sky[2]);
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.globalAlpha = pgrade.washOp;
+      ctx.fillStyle = wash;
+      ctx.fillRect(panel.rect.x, panel.rect.y, panel.rect.w, panel.rect.h);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      if (i === heroIndex && pstate.img) drawHalftone(ctx, panel.rect);
+      const shade = ctx.createLinearGradient(0, panel.rect.y + panel.rect.h * 0.55, 0, panel.rect.y + panel.rect.h);
+      shade.addColorStop(0, 'rgba(0,0,0,0)');
+      shade.addColorStop(1, 'rgba(0,0,0,0.42)');
+      ctx.fillStyle = shade;
+      ctx.fillRect(panel.rect.x, panel.rect.y, panel.rect.w, panel.rect.h);
     }
-    // Colour wash (per-panel grade) + halftone + bottom shade.
-    const wash = ctx.createLinearGradient(panel.rect.x, panel.rect.y, panel.rect.x, panel.rect.y + panel.rect.h);
-    wash.addColorStop(0, pgrade.sky[0]);
-    wash.addColorStop(1, pgrade.sky[2]);
-    ctx.globalCompositeOperation = 'overlay';
-    ctx.globalAlpha = pgrade.washOp;
-    ctx.fillStyle = wash;
-    ctx.fillRect(panel.rect.x, panel.rect.y, panel.rect.w, panel.rect.h);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
-    if (i === heroIndex && pstate.img) drawHalftone(ctx, panel.rect);
-    const shade = ctx.createLinearGradient(0, panel.rect.y + panel.rect.h * 0.55, 0, panel.rect.y + panel.rect.h);
-    shade.addColorStop(0, 'rgba(0,0,0,0)');
-    shade.addColorStop(1, 'rgba(0,0,0,0.42)');
-    ctx.fillStyle = shade;
-    ctx.fillRect(panel.rect.x, panel.rect.y, panel.rect.w, panel.rect.h);
     ctx.restore();
     // Neon-piped seam: thick frame stroke, then a thin glowing accent line.
     ctx.save();
@@ -639,7 +775,7 @@ export function drawCover(canvas, state) {
   });
   // Burst hub ring: a thin neon ring just inside the hub edge, so the hub reads as
   // a medallion rather than one more slice.
-  if (state.layout === 'burst') {
+  if (isBurst) {
     const hub = panels[panels.length - 1];
     ctx.save();
     tracePoly(ctx, hub.poly);
@@ -658,16 +794,23 @@ export function drawCover(canvas, state) {
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
   }
+  if (state.scanlines) drawScanlines(ctx, w, h);
   const vig = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.45, w / 2, h / 2, Math.max(w, h) * 0.75);
   vig.addColorStop(0, 'rgba(0,0,0,0)');
   vig.addColorStop(1, 'rgba(0,0,0,0.28)');
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, w, h);
+  // Outer frame: thick dark stroke, then a thin gradient neon line (accent -> sun ->
+  // accent along the diagonal) instead of a flat colour, so the border itself glows.
   const frameW = Math.max(6, Math.round(Math.min(w, h) * 0.012));
   ctx.strokeStyle = grade.frame;
   ctx.lineWidth = frameW;
   ctx.strokeRect(frameW / 2, frameW / 2, w - frameW, h - frameW);
-  ctx.strokeStyle = grade.accent;
+  const neonLine = ctx.createLinearGradient(0, 0, w, h);
+  neonLine.addColorStop(0, grade.accent);
+  neonLine.addColorStop(0.5, grade.sun);
+  neonLine.addColorStop(1, grade.accent);
+  ctx.strokeStyle = neonLine;
   ctx.lineWidth = Math.max(2, frameW * 0.18);
   ctx.strokeRect(frameW * 1.6, frameW * 1.6, w - frameW * 3.2, h - frameW * 3.2);
   drawType(ctx, w, h, state, grade);

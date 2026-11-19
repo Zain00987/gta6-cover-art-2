@@ -3,8 +3,10 @@
 // names), panelPhoto (comma list, one per panel; empty = sky backdrop), panelGrade (comma
 // list of per-panel grades), panelPan (semicolon list of "ox,oy" canvas-pixel pans, one
 // per panel — used to frame faces in wide/short panels), panelZoom (comma list of zooms),
-// panelFit (comma list of "cover" or "whole"), caption, subtitle, tagline, titlePos,
-// capColor, badge.
+// panelFit (comma list of "cover" or "whole"), panelAnchor (comma list of "top", "center"
+// or "bottom" — pins the cover crop so a face survives a wide panel), panelPop (comma
+// list of 1/0 — colour pop per panel), caption, subtitle, tagline, titlePos, capColor,
+// badge, scanlines.
 // window.__shotReady is set once painted.
 export async function runShot(shot, query, apply, redraw) {
   if (shot === 'cover') document.body.classList.add('shot-cover');
@@ -28,12 +30,19 @@ export async function runShot(shot, query, apply, redraw) {
     panelFits: query.get('panelFit')
       ? query.get('panelFit').split(',').map((s) => s.trim())
       : undefined,
+    panelAnchors: query.get('panelAnchor')
+      ? query.get('panelAnchor').split(',').map((s) => s.trim())
+      : undefined,
+    panelPops: query.get('panelPop')
+      ? query.get('panelPop').split(',').map((s) => s.trim() === '1')
+      : undefined,
     caption: query.get('caption') ?? undefined,
     subtitle: query.get('subtitle') ?? undefined,
     tagline: query.get('tagline') ?? undefined,
     titlePos: query.get('titlePos') ?? undefined,
     captionColor: query.get('capColor') ?? undefined,
     badge: query.get('badge') === '0' ? false : undefined,
+    scanlines: query.get('scanlines') === '1' ? true : undefined,
   };
   await apply(scene);
   if (document.fonts) {

@@ -1,7 +1,8 @@
-// Neon Heist Canvas editor (rebuilt 2026-11-20): wires the controls to the drawing
-// engine, loads photos from the machine (or the bundled samples), lets each panel be
-// panned, zoomed, flipped, fitted and graded on its own, and exports the cover as a
-// PNG. A `?shot=` query sets up a fixed scene for a screenshot instead.
+// Neon Heist Canvas editor (rebuilt 2026-11-20, second recorded pass): wires the
+// controls to the drawing engine, loads photos from the machine (or the three bundled
+// samples), lets each panel be panned, zoomed, flipped, fitted, anchored and graded
+// on its own, and exports the cover as a PNG. A `?shot=` query sets up a fixed scene
+// for a screenshot instead.
 import { drawCover, renderCover, GRADES, SIZES, LAYOUTS, layoutPanels, pointInPoly } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -24,6 +25,7 @@ export const PRESETS = [
   { caption: 'KING OF VICE', subtitle: 'ONE CITY · ONE CROWN', tagline: 'BUILT IN THE HEAT', layout: 'quad', grade: 'sunset', titlePos: 'bottom' },
   { caption: 'SOLO RIDE', subtitle: 'LEONIDA', tagline: 'JUST ME AND THE COAST', layout: 'solo', grade: 'noir', titlePos: 'diagonal' },
   { caption: 'SUNBURST HEIST', subtitle: 'VICE CITY · EST. 2026', tagline: 'EVERY RAY A GETAWAY', layout: 'burst', grade: 'sunset', titlePos: 'bottom' },
+  { caption: 'OCEAN DRIVE', subtitle: 'VICE CITY NIGHTS', tagline: 'NEON NEVER SLEEPS', layout: 'chevron', grade: 'neon', titlePos: 'bottom' },
 ];
 
 const state = {
@@ -39,7 +41,8 @@ const state = {
   outline: true,
   badge: true,
   grain: true,
-  panels: Array.from({ length: 8 }, () => ({ img: null, zoom: 1, ox: 0, oy: 0, flip: false, fit: 'cover', grade: 'auto' })),
+  scanlines: false,
+  panels: Array.from({ length: 8 }, () => ({ img: null, zoom: 1, ox: 0, oy: 0, flip: false, fit: 'cover', grade: 'auto', anchor: 'center', pop: true })),
 };
 
 let photos = []; // { name, img } in load order
@@ -59,6 +62,11 @@ export function loadImage(url) {
 /** How many panels the current layout shows. */
 function panelCount() {
   return layoutPanels(state.layout, 100, 100).length;
+}
+
+/** True when the active panel is the burst hub (the sun medallion, never a photo). */
+function isHubPanel() {
+  return state.layout === 'burst' && activePanel === panelCount() - 1;
 }
 
 /** Redraws the preview at the chosen export size. */
@@ -85,7 +93,7 @@ function buildPanelButtons() {
   for (let i = 0; i < panelCount(); i++) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.textContent = `Panel ${i + 1}`;
+    b.textContent = state.layout === 'burst' && i === panelCount() - 1 ? 'Sun medallion' : `Panel ${i + 1}`;
     b.classList.toggle('active', i === activePanel);
     b.addEventListener('click', () => {
       activePanel = i;
@@ -143,6 +151,10 @@ function buildThumbs() {
     img.alt = p.name;
     b.appendChild(img);
     b.addEventListener('click', () => {
+      if (isHubPanel()) {
+        statusEl.textContent = 'The hub is the sun medallion — pick another panel for photos';
+        return;
+      }
       state.panels[activePanel].img = p.img;
       state.panels[activePanel].ox = 0;
       state.panels[activePanel].oy = 0;
@@ -153,13 +165,22 @@ function buildThumbs() {
   });
 }
 
-/** Syncs the panel controls (zoom slider, fit, photo + grade selects) with the active panel. */
+/** Syncs the panel controls (zoom slider, fit, anchor, pop, photo + grade selects). */
 function syncPanelControls() {
   const panel = state.panels[activePanel];
   zoomInput.value = String(panel.zoom);
   document.getElementById('zoomVal').textContent = `${panel.zoom.toFixed(1)}x`;
   document.getElementById('flip').textContent = panel.flip ? 'Unflip photo' : 'Flip photo';
   document.getElementById('fit').textContent = panel.fit === 'whole' ? 'Fit: whole photo' : 'Fit: fill panel';
+  document.getElementById('pop').textContent = panel.pop === false ? 'Colour pop: off' : 'Colour pop: on';
+  markActive('anchorBtns', panel.anchor || 'center');
+  // The burst hub is the sun medallion: no photo, flip, fit or anchor applies to it.
+  const hub = isHubPanel();
+  panelPhotoSelect.disabled = hub;
+  document.getElementById('flip').disabled = hub;
+  document.getElementById('fit').disabled = hub;
+  document.getElementById('pop').disabled = hub;
+  document.querySelectorAll('#anchorBtns button').forEach((b) => { b.disabled = hub; });
   buildPhotoSelect();
   buildGradeSelect();
 }
@@ -174,6 +195,7 @@ function syncAll() {
   document.getElementById('outline').checked = state.outline;
   document.getElementById('badge').checked = state.badge;
   document.getElementById('grain').checked = state.grain;
+  document.getElementById('scanlines').checked = state.scanlines;
   captionInput.value = state.caption;
   subtitleInput.value = state.subtitle;
   taglineInput.value = state.tagline;
@@ -186,8 +208,10 @@ function syncAll() {
 
 /** Assigns a photo to the first panel that has none, or to the active panel. */
 function placePhoto(img) {
-  const empty = state.panels.slice(0, panelCount()).findIndex((p) => !p.img);
+  const count = panelCount();
+  const empty = state.panels.slice(0, count).findIndex((p, i) => !p.img && !(state.layout === 'burst' && i === count - 1));
   const target = empty === -1 ? activePanel : empty;
+  if (state.layout === 'burst' && target === count - 1) return; // hub stays the medallion
   state.panels[target].img = img;
   state.panels[target].ox = 0;
   state.panels[target].oy = 0;
@@ -222,9 +246,11 @@ async function loadSamples(names) {
       statusEl.textContent = `Sample ${name}.jpg did not load`;
     }
   }
-  // Fill any panel still empty by cycling the loaded photos, so every panel shows art.
+  // Fill any panel still empty by cycling the loaded photos, so every panel shows
+  // art — except the burst hub, which stays the sun medallion.
   const count = panelCount();
   for (let i = 0; i < count; i++) {
+    if (state.layout === 'burst' && i === count - 1) continue;
     if (!state.panels[i].img && photos.length) {
       state.panels[i].img = photos[i % photos.length].img;
     }
@@ -274,7 +300,7 @@ document.getElementById('photos').addEventListener('change', (e) => {
   addFiles([...e.target.files]);
   e.target.value = '';
 });
-document.getElementById('samples').addEventListener('click', () => loadSamples(['pier', 'boulevard']));
+document.getElementById('samples').addEventListener('click', () => loadSamples(['pier', 'boulevard', 'neon']));
 document.getElementById('surprise').addEventListener('click', () => {
   // Mix-and-match instead of a wholesale preset: text from one preset, layout,
   // grade and title position rolled independently — more distinct posters per click.
@@ -329,6 +355,14 @@ document.getElementById('colorBtns').addEventListener('click', (e) => {
   syncAll();
   redraw();
 });
+document.getElementById('anchorBtns').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  state.panels[activePanel].anchor = b.dataset.value;
+  state.panels[activePanel].oy = 0;
+  syncPanelControls();
+  redraw();
+});
 document.getElementById('outline').addEventListener('change', (e) => {
   state.outline = e.target.checked;
   redraw();
@@ -339,6 +373,10 @@ document.getElementById('badge').addEventListener('change', (e) => {
 });
 document.getElementById('grain').addEventListener('change', (e) => {
   state.grain = e.target.checked;
+  redraw();
+});
+document.getElementById('scanlines').addEventListener('change', (e) => {
+  state.scanlines = e.target.checked;
   redraw();
 });
 captionInput.addEventListener('input', () => {
@@ -387,6 +425,12 @@ document.getElementById('fit').addEventListener('click', () => {
   syncPanelControls();
   redraw();
 });
+document.getElementById('pop').addEventListener('click', () => {
+  const panel = state.panels[activePanel];
+  panel.pop = panel.pop === false;
+  syncPanelControls();
+  redraw();
+});
 document.getElementById('recenter').addEventListener('click', () => {
   const panel = state.panels[activePanel];
   panel.ox = 0;
@@ -414,6 +458,25 @@ document.getElementById('export').addEventListener('click', () => {
       statusEl.textContent = `Saved neon-heist-${w}x${h}.png`;
     }, 'image/png');
   }, 30));
+});
+
+/** Copies the current cover PNG straight to the clipboard (Chrome). */
+document.getElementById('copyPng').addEventListener('click', async () => {
+  const [w, h] = SIZES[state.size];
+  statusEl.textContent = `Rendering ${w}x${h} for clipboard…`;
+  await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
+  const out = renderCover(w, h, state);
+  const blob = await new Promise((resolve) => out.toBlob(resolve, 'image/png'));
+  if (!blob) {
+    statusEl.textContent = 'Copy failed';
+    return;
+  }
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    statusEl.textContent = `Copied ${w}x${h} PNG to clipboard`;
+  } catch {
+    statusEl.textContent = 'Clipboard blocked by the browser — use Export PNG instead';
+  }
 });
 
 /** One click renders and downloads all four post sizes, in order. */
@@ -450,9 +513,10 @@ async function applyShot(scene) {
   if (scene.titlePos) state.titlePos = scene.titlePos;
   if (scene.captionColor) state.captionColor = scene.captionColor;
   if (scene.badge !== undefined) state.badge = scene.badge;
+  if (scene.scanlines !== undefined) state.scanlines = scene.scanlines;
   activePanel = 0;
   if (scene.photos && scene.photos.length) {
-    state.panels.forEach((p) => { p.img = null; p.ox = 0; p.oy = 0; p.grade = 'auto'; p.fit = 'cover'; });
+    state.panels.forEach((p) => { p.img = null; p.ox = 0; p.oy = 0; p.grade = 'auto'; p.fit = 'cover'; p.anchor = 'center'; p.pop = true; });
     await loadSamples(scene.photos);
   }
   if (scene.panelPhotos) {
@@ -493,6 +557,16 @@ async function applyShot(scene) {
       if (state.panels[i] && (f === 'whole' || f === 'cover')) state.panels[i].fit = f;
     });
   }
+  if (scene.panelAnchors) {
+    scene.panelAnchors.forEach((a, i) => {
+      if (state.panels[i] && (a === 'top' || a === 'center' || a === 'bottom')) state.panels[i].anchor = a;
+    });
+  }
+  if (scene.panelPops) {
+    scene.panelPops.forEach((p, i) => {
+      if (state.panels[i] && typeof p === 'boolean') state.panels[i].pop = p;
+    });
+  }
   syncAll();
   redraw();
 }
@@ -503,7 +577,7 @@ if (shot) {
   await runShot(shot, params, applyShot, redraw);
 } else {
   syncAll();
-  await loadSamples(['pier', 'boulevard']);
+  await loadSamples(['pier', 'boulevard', 'neon']);
   if (document.fonts) {
     document.fonts.load('100px Anton').then(redraw).catch(() => {});
   }
