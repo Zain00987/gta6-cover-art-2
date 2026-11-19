@@ -1,23 +1,16 @@
-// Neon Heist Canvas — a rebuilt gta6-cover-art-01 entry (Node 22, standard library
-// only): the app is this directory's app/ folder, plain static files a desktop browser
-// loads offline (app/index.html and its ES modules, no library and no network request),
-// and the program hands it in. It copies app/ and screenshots/ from beside this file
-// to /output and writes /output/dossier.json, the summary the judge reads, with the
-// vendored make.fun library. The cover art itself: a GTA-style poster maker with eight
-// polygon layouts (solo, diagonal duo, hero slant, offset strips, staggered quad,
-// triptych, a radial burst with a sun-medallion hub, and a new chevron band), per-panel
-// colour grades, fit modes and photo anchors, a code-drawn Vice City sunset backdrop
-// (gradient sky, clouds, striped sun, a bay with a sun reflection, skyline and palm
-// silhouettes, noir stars — no game artwork, logo or font), multi-zone typography
-// (title with a neon echo, glow and outline, subtitle ribbon, tagline on a dark pill,
-// stamp badge that follows the title), film grain, halftone and optional scanlines,
-// exporting PNG at 1080x1080, 1080x1350, 1080x1920 and 1920x1080. Its three sample
-// photos (app/samples/) were made for make.fun with an image model and are free to
-// use. Put your 3 or 4 PNG or JPEG screenshots in screenshots/ (the first by name is
-// the cover) and run it.
+// Neon Heist Canvas — the entrypoint (Node 22, standard library only).
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
+// The app is app/: plain static files a desktop browser loads offline —
+// index.html plus its ES modules, no library, no network request. This program
+// hands it in: it copies app/ and screenshots/ from beside this file into the
+// output directory and writes /output/dossier.json, the summary the judge
+// reads, with the vendored make.fun library.
+//
+// The poster itself is an SVG studio: layouts are JSON specs of clip-path
+// polygons, grades are SVG filters, the Vice City sunset is code-drawn shapes,
+// and the export serialises the live SVG to PNG. Serve it locally with
+// `node serve.ts`, then open http://localhost:8080. Outside the grader's
+// container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
 import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -26,40 +19,17 @@ import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-app.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
-const outRaw = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const rawOut = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-// Validate the output directory before copying anything: refuse an empty value and
-// refuse the repository itself (copying app/ into itself would recurse). A relative
-// value is resolved against the working directory, so `MAKEFUN_OUTPUT_DIR=out` works
-// for local checks while the grader's absolute /output works too. A bad value fails
-// here, loudly, instead of producing a half-built /output the scorer then rejects.
-if (!outRaw.trim()) throw new Error('MAKEFUN_OUTPUT_DIR is empty');
-const out = isAbsolute(outRaw) ? outRaw : resolve(process.cwd(), outRaw);
+// Refuse a useless output directory before touching anything: an empty value,
+// or the repository itself (copying app/ into itself would recurse forever).
+if (!rawOut.trim()) throw new Error('MAKEFUN_OUTPUT_DIR is empty');
+const out = isAbsolute(rawOut) ? rawOut : resolve(process.cwd(), rawOut);
 if (resolve(out) === resolve(here)) throw new Error('MAKEFUN_OUTPUT_DIR must not be the repository root');
-if (!existsSync(join(here, 'app', 'index.html'))) throw new Error('app/index.html is missing from the repository');
-if (!existsSync(join(here, 'vendor', 'makefun-app.ts'))) throw new Error('vendor/makefun-app.ts is missing from the repository');
-if (!existsSync(join(here, 'app', 'fonts', 'Anton-Regular.ttf'))) throw new Error('app/fonts/Anton-Regular.ttf is missing from the repository');
 
-// Pre-flight caps, checked before any copying: the scorer refuses an entry with
-// more than 993 files or 48 MiB under app/, and it needs 3-4 screenshots, each an
-// image file. Failing here is louder and cheaper than a refused entry later.
-let appFiles = 0;
-let appBytes = 0;
-const walk = (dir: string) => {
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    const s = statSync(p);
-    if (s.isDirectory()) walk(p);
-    else { appFiles += 1; appBytes += s.size; }
-  }
-};
-walk(join(here, 'app'));
-if (appFiles > 993) throw new Error(`app/ has ${appFiles} files, over the 993 cap`);
-if (appBytes > 50331648) throw new Error(`app/ is ${appBytes} bytes, over the 48 MiB cap`);
-const shots = existsSync(join(here, 'screenshots')) ? readdirSync(join(here, 'screenshots')) : [];
-if (shots.length < 3 || shots.length > 4) throw new Error(`screenshots/ has ${shots.length} files, need 3 or 4`);
-for (const name of shots) {
-  if (!/\.(png|jpe?g)$/i.test(name)) throw new Error(`screenshot ${name} is not a PNG or JPEG`);
+// The two things the hand-in cannot do without.
+for (const needed of ['app/index.html', 'vendor/makefun-app.ts', 'app/src/poster.js']) {
+  if (!existsSync(join(here, needed))) throw new Error(`${needed} is missing from the repository`);
 }
 
 mkdirSync(out, { recursive: true });
@@ -67,10 +37,10 @@ cpSync(join(here, 'app'), join(out, 'app'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in app/ or 48 MiB of app
-// files, in all, or a path under app/ over 1000 bytes: app/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
+// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the
+// bytes; the others refuse an entry the scorer would refuse — more than 4
+// screenshots or one over 256 KiB; more than 993 files in app/ or 48 MiB of app
+// files in all, or a path under app/ over 1000 bytes.
 writeFileSync(
   join(out, 'dossier.json'),
   buildDossier(out, {
@@ -82,12 +52,17 @@ writeFileSync(
   }),
 );
 
-// Post-copy check: the dossier must exist and be non-empty, and every screenshot we
-// copied must be within the scorer's size cap — otherwise the entry would be refused
-// after all this work, so fail here instead of silently handing in a broken /output.
-const dossier = statSync(join(out, 'dossier.json'));
-if (dossier.size === 0) throw new Error('dossier.json was written empty');
-for (const name of readdirSync(join(out, 'screenshots'))) {
-  const size = statSync(join(out, 'screenshots', name)).size;
-  if (size > 262144) throw new Error(`screenshot ${name} is ${size} bytes, over the 256 KiB cap`);
+// A hand-in that silently dropped a file is worse than a loud failure, so
+// check the copy landed: dossier.json exists and is non-empty, and every
+// screenshot made it across at its full size.
+const shotNames = existsSync(join(here, 'screenshots')) ? readdirSync(join(here, 'screenshots')).filter((n) => /\.(png|jpe?g)$/i.test(n)) : [];
+for (const name of shotNames) {
+  const copied = join(out, 'screenshots', name);
+  const source = join(here, 'screenshots', name);
+  if (!existsSync(copied) || statSync(copied).size === 0) throw new Error(`screenshots/${name} did not copy to the output`);
+  if (statSync(copied).size !== statSync(source).size) throw new Error(`screenshots/${name} copied short (${statSync(copied).size} of ${statSync(source).size} bytes)`);
 }
+const dossier = join(out, 'dossier.json');
+if (!existsSync(dossier) || statSync(dossier).size === 0) throw new Error('dossier.json was not written');
+const appFiles = readdirSync(join(out, 'app'), { recursive: true }).length;
+console.log(`Neon Heist Canvas handed in: ${appFiles} app entries, ${shotNames.length} screenshot(s), dossier.json (${statSync(dossier).size} bytes) written to ${out}`);
