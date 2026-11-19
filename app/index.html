@@ -11,7 +11,7 @@
 <header class="brand">
   <div>
     <h1>NEON HEIST CANVAS</h1>
-    <p>Turn your photos into poster-style cover art — diagonal panels, a radial burst, sunset skies, neon piping. Everything runs on your machine — no uploads.</p>
+    <p>Turn your photos into poster-style cover art — diagonal panels, a radial burst with a sun medallion, sunset skies over the bay, neon piping. Everything runs on your machine — no uploads.</p>
   </div>
   <span class="badge">OFFLINE · PNG EXPORT</span>
 </header>
@@ -22,7 +22,7 @@
       <label class="file">Add photos from your machine
         <input id="photos" type="file" accept="image/*" multiple>
       </label>
-      <button id="samples" type="button">Use the two sample photos</button>
+      <button id="samples" type="button">Use the three sample photos</button>
       <button id="surprise" type="button" class="lucky">🎲 Surprise me — random poster</button>
       <div id="thumbs" class="thumbs" aria-label="Loaded photos"></div>
       <p class="hint">Click a thumbnail to put it in the selected panel. Drag the preview to pan a photo.</p>
@@ -37,6 +37,7 @@
         <button type="button" data-value="quad">Staggered quad</button>
         <button type="button" data-value="triptych">Triptych</button>
         <button type="button" data-value="burst">Radial burst</button>
+        <button type="button" data-value="chevron">Chevron</button>
       </div>
     </section>
     <section>
@@ -51,9 +52,17 @@
       <label>Zoom <span id="zoomVal">1.0x</span>
         <input id="zoom" type="range" min="1" max="3" step="0.05" value="1">
       </label>
+      <label>Photo anchor — which part of the photo the crop keeps
+        <span id="anchorBtns" class="btnrow">
+          <button type="button" data-value="top">Top (faces)</button>
+          <button type="button" data-value="center">Centre</button>
+          <button type="button" data-value="bottom">Bottom</button>
+        </span>
+      </label>
       <div class="btnrow">
         <button id="flip" type="button">Flip photo</button>
         <button id="fit" type="button">Fit: fill panel</button>
+        <button id="pop" type="button">Colour pop: on</button>
         <button id="recenter" type="button">Center photo</button>
       </div>
     </section>
@@ -87,6 +96,7 @@
       <label class="check"><input id="outline" type="checkbox" checked> Bold outline around the title</label>
       <label class="check"><input id="badge" type="checkbox" checked> “Vice City · Leonida” stamp badge</label>
       <label class="check"><input id="grain" type="checkbox" checked> Film grain (printed-poster feel)</label>
+      <label class="check"><input id="scanlines" type="checkbox"> Retro scanlines</label>
     </section>
     <section>
       <h2>5 · Colour grade</h2>
@@ -107,6 +117,7 @@
         <button type="button" data-value="1920x1080">1920 × 1080</button>
       </div>
       <button id="export" type="button" class="primary">Export PNG</button>
+      <button id="copyPng" type="button">Copy PNG to clipboard</button>
       <button id="exportAll" type="button">Export all 4 sizes</button>
       <p id="status" role="status"></p>
     </section>

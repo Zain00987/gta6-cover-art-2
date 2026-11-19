@@ -27,10 +27,14 @@ input[type=range] { width: 100%; accent-color: #ff2ea6; }
 button { font: inherit; font-weight: 700; padding: 9px 12px; border: 1px solid #5c4a7a; border-radius: 8px; background: #241640; color: #f2ecff; cursor: pointer; }
 button:hover { border-color: #ff2ea6; }
 button.active { background: #ff2ea6; border-color: #ff2ea6; color: #fff; }
+button:disabled { opacity: 0.4; cursor: default; }
+button:disabled:hover { border-color: #5c4a7a; }
 button.primary { width: 100%; margin-top: 10px; background: linear-gradient(90deg, #ff2ea6, #ff6a3d); border: 0; font-size: 17px; padding: 12px; }
 button.lucky { width: 100%; margin-top: 8px; background: linear-gradient(90deg, #19c3c3, #7b2ff7); border: 0; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .btnrow button { flex: 1 1 auto; padding: 8px 6px; }
+#anchorBtns { margin: 0; }
+#anchorBtns button { font-size: 13px; padding: 7px 4px; }
 .swatches button { flex: 0 0 34px; height: 34px; padding: 0; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.5); }
 .swatches button.active { border-color: #fff; box-shadow: 0 0 0 2px #ff2ea6; }
 .file input { margin-top: 4px; }
