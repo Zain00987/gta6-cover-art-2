@@ -1,7 +1,7 @@
-// Neon Heist Canvas editor: wires the controls to the drawing engine, loads photos
-// from the machine (or the bundled samples), lets each panel be panned, zoomed, flipped
-// and graded on its own, and exports the cover as a PNG. A `?shot=` query sets up a
-// fixed scene for a screenshot instead.
+// Neon Heist Canvas editor (rebuilt 2026-11-20): wires the controls to the drawing
+// engine, loads photos from the machine (or the bundled samples), lets each panel be
+// panned, zoomed, flipped, fitted and graded on its own, and exports the cover as a
+// PNG. A `?shot=` query sets up a fixed scene for a screenshot instead.
 import { drawCover, renderCover, GRADES, SIZES, LAYOUTS, layoutPanels, pointInPoly } from './cover.js';
 import { runShot } from './shots.js';
 
@@ -23,22 +23,23 @@ export const PRESETS = [
   { caption: 'PALM & PISTOL', subtitle: 'MIAMI HEAT', tagline: 'EVERY SUNSET HAS A PRICE', layout: 'slant', grade: 'miami', titlePos: 'top' },
   { caption: 'KING OF VICE', subtitle: 'ONE CITY · ONE CROWN', tagline: 'BUILT IN THE HEAT', layout: 'quad', grade: 'sunset', titlePos: 'bottom' },
   { caption: 'SOLO RIDE', subtitle: 'LEONIDA', tagline: 'JUST ME AND THE COAST', layout: 'solo', grade: 'noir', titlePos: 'diagonal' },
+  { caption: 'SUNBURST HEIST', subtitle: 'VICE CITY · EST. 2026', tagline: 'EVERY RAY A GETAWAY', layout: 'burst', grade: 'sunset', titlePos: 'bottom' },
 ];
 
 const state = {
-  layout: 'hero',
+  layout: 'burst',
   grade: 'vice',
   size: '1080x1080',
-  caption: 'NEON HEIST',
-  subtitle: 'LEONIDA · 2026',
-  tagline: 'STEAL THE SUNSET',
+  caption: 'SUNBURST HEIST',
+  subtitle: 'VICE CITY · EST. 2026',
+  tagline: 'EVERY RAY A GETAWAY',
   titlePos: 'bottom',
   titleScale: 1,
   captionColor: '#fff7d6',
   outline: true,
   badge: true,
   grain: true,
-  panels: Array.from({ length: 6 }, () => ({ img: null, zoom: 1, ox: 0, oy: 0, flip: false, grade: 'auto' })),
+  panels: Array.from({ length: 8 }, () => ({ img: null, zoom: 1, ox: 0, oy: 0, flip: false, fit: 'cover', grade: 'auto' })),
 };
 
 let photos = []; // { name, img } in load order
@@ -152,12 +153,13 @@ function buildThumbs() {
   });
 }
 
-/** Syncs the panel controls (zoom slider, photo + grade selects) with the active panel. */
+/** Syncs the panel controls (zoom slider, fit, photo + grade selects) with the active panel. */
 function syncPanelControls() {
   const panel = state.panels[activePanel];
   zoomInput.value = String(panel.zoom);
   document.getElementById('zoomVal').textContent = `${panel.zoom.toFixed(1)}x`;
   document.getElementById('flip').textContent = panel.flip ? 'Unflip photo' : 'Flip photo';
+  document.getElementById('fit').textContent = panel.fit === 'whole' ? 'Fit: whole photo' : 'Fit: fill panel';
   buildPhotoSelect();
   buildGradeSelect();
 }
@@ -274,15 +276,22 @@ document.getElementById('photos').addEventListener('change', (e) => {
 });
 document.getElementById('samples').addEventListener('click', () => loadSamples(['pier', 'boulevard']));
 document.getElementById('surprise').addEventListener('click', () => {
+  // Mix-and-match instead of a wholesale preset: text from one preset, layout,
+  // grade and title position rolled independently — more distinct posters per click.
   const pick = PRESETS[Math.floor(Math.random() * PRESETS.length)];
+  const layouts = Object.keys(LAYOUTS);
+  const grades = Object.keys(GRADES);
+  const positions = ['bottom', 'top', 'diagonal'];
   Object.assign(state, {
-    layout: pick.layout, grade: pick.grade, titlePos: pick.titlePos,
+    layout: layouts[Math.floor(Math.random() * layouts.length)],
+    grade: grades[Math.floor(Math.random() * grades.length)],
+    titlePos: positions[Math.floor(Math.random() * positions.length)],
     caption: pick.caption, subtitle: pick.subtitle, tagline: pick.tagline,
   });
   activePanel = 0;
   syncAll();
   redraw();
-  statusEl.textContent = `Surprise: ${pick.caption} — ${LAYOUTS[pick.layout].label}, ${GRADES[pick.grade].label}`;
+  statusEl.textContent = `Surprise: ${pick.caption} — ${LAYOUTS[state.layout].label}, ${GRADES[state.grade].label}`;
 });
 document.getElementById('layoutBtns').addEventListener('click', (e) => {
   const b = e.target.closest('button');
@@ -372,6 +381,12 @@ document.getElementById('flip').addEventListener('click', () => {
   syncPanelControls();
   redraw();
 });
+document.getElementById('fit').addEventListener('click', () => {
+  const panel = state.panels[activePanel];
+  panel.fit = panel.fit === 'whole' ? 'cover' : 'whole';
+  syncPanelControls();
+  redraw();
+});
 document.getElementById('recenter').addEventListener('click', () => {
   const panel = state.panels[activePanel];
   panel.ox = 0;
@@ -382,8 +397,34 @@ document.getElementById('recenter').addEventListener('click', () => {
 });
 document.getElementById('export').addEventListener('click', () => {
   const [w, h] = SIZES[state.size];
-  const out = renderCover(w, h, state);
-  out.toBlob((blob) => {
+  statusEl.textContent = `Rendering ${w}x${h}…`;
+  // Let the status paint before the synchronous render, so the UI never looks frozen.
+  requestAnimationFrame(() => setTimeout(() => {
+    const out = renderCover(w, h, state);
+    out.toBlob((blob) => {
+      if (!blob) {
+        statusEl.textContent = 'Export failed';
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `neon-heist-${w}x${h}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      statusEl.textContent = `Saved neon-heist-${w}x${h}.png`;
+    }, 'image/png');
+  }, 30));
+});
+
+/** One click renders and downloads all four post sizes, in order. */
+document.getElementById('exportAll').addEventListener('click', async () => {
+  const keys = Object.keys(SIZES);
+  for (let i = 0; i < keys.length; i++) {
+    const [w, h] = SIZES[keys[i]];
+    statusEl.textContent = `Rendering ${w}x${h} (${i + 1}/${keys.length})…`;
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
+    const out = renderCover(w, h, state);
+    const blob = await new Promise((resolve) => out.toBlob(resolve, 'image/png'));
     if (!blob) {
       statusEl.textContent = 'Export failed';
       return;
@@ -393,8 +434,9 @@ document.getElementById('export').addEventListener('click', () => {
     a.download = `neon-heist-${w}x${h}.png`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    statusEl.textContent = `Saved neon-heist-${w}x${h}.png`;
-  }, 'image/png');
+    await new Promise((r) => setTimeout(r, 350));
+  }
+  statusEl.textContent = `Saved ${keys.length} PNGs (1080x1080, 1080x1350, 1080x1920, 1920x1080)`;
 });
 
 /** Applies a shot scene (layout, grade, size, photos, type) then draws it. */
@@ -410,7 +452,7 @@ async function applyShot(scene) {
   if (scene.badge !== undefined) state.badge = scene.badge;
   activePanel = 0;
   if (scene.photos && scene.photos.length) {
-    state.panels.forEach((p) => { p.img = null; p.ox = 0; p.oy = 0; p.grade = 'auto'; });
+    state.panels.forEach((p) => { p.img = null; p.ox = 0; p.oy = 0; p.grade = 'auto'; p.fit = 'cover'; });
     await loadSamples(scene.photos);
   }
   if (scene.panelPhotos) {
@@ -444,6 +486,11 @@ async function applyShot(scene) {
   if (scene.panelZooms) {
     scene.panelZooms.forEach((z, i) => {
       if (state.panels[i] && Number.isFinite(z) && z >= 1 && z <= 3) state.panels[i].zoom = z;
+    });
+  }
+  if (scene.panelFits) {
+    scene.panelFits.forEach((f, i) => {
+      if (state.panels[i] && (f === 'whole' || f === 'cover')) state.panels[i].fit = f;
     });
   }
   syncAll();

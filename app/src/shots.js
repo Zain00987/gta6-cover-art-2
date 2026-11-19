@@ -3,7 +3,8 @@
 // names), panelPhoto (comma list, one per panel; empty = sky backdrop), panelGrade (comma
 // list of per-panel grades), panelPan (semicolon list of "ox,oy" canvas-pixel pans, one
 // per panel — used to frame faces in wide/short panels), panelZoom (comma list of zooms),
-// caption, subtitle, tagline, titlePos, capColor, badge.
+// panelFit (comma list of "cover" or "whole"), caption, subtitle, tagline, titlePos,
+// capColor, badge.
 // window.__shotReady is set once painted.
 export async function runShot(shot, query, apply, redraw) {
   if (shot === 'cover') document.body.classList.add('shot-cover');
@@ -23,6 +24,9 @@ export async function runShot(shot, query, apply, redraw) {
       : undefined,
     panelZooms: query.get('panelZoom')
       ? query.get('panelZoom').split(',').map(Number)
+      : undefined,
+    panelFits: query.get('panelFit')
+      ? query.get('panelFit').split(',').map((s) => s.trim())
       : undefined,
     caption: query.get('caption') ?? undefined,
     subtitle: query.get('subtitle') ?? undefined,

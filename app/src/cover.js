@@ -1,10 +1,13 @@
-// Neon Heist Canvas drawing engine: turns photos, a layout and colour grades into
-// GTA-style poster cover art on a canvas. Every panel, gradient, sun, palm, skyline,
-// halftone dot and letter is drawn here from scratch — no game artwork, logo or font
-// is used. Unlike a plain grid poster, panels are polygons: diagonal seams, staggered
-// and overlapping strips, so the composition reads like a comic-book cover. The sun,
-// palms and neon glow are only ever drawn into SKY panels (empty panels) or behind
-// the type — never over a photo — so the subject's face is never fought by an overlay.
+// Neon Heist Canvas — drawing engine (rebuilt 2026-11-20).
+// Turns photos, a layout and colour grades into GTA-style poster cover art on a
+// canvas. Every panel, gradient, sun, palm, skyline, halftone dot and letter is drawn
+// here from scratch — no Rockstar logo, artwork or font is used anywhere. Panels are
+// polygons: diagonal seams, staggered strips and, new in this rebuild, a radial burst
+// (a central hexagon hub with six wedges radiating out), so the composition reads
+// like a comic-book cover instead of a grid. The sun, palms and neon glow are only
+// ever drawn into SKY panels (empty panels) — never over a photo — so the subject's
+// face is never fought by an overlay. Photos can be cover-fit or shown whole
+// (fit: 'whole' draws the full photo over a sky wash), so any photo works.
 
 export const GRADES = {
   sunset: {
@@ -48,6 +51,7 @@ export const LAYOUTS = {
   strips: { label: 'Offset strips', panels: 3 },
   quad: { label: 'Staggered quad', panels: 4 },
   triptych: { label: 'Triptych', panels: 3 },
+  burst: { label: 'Radial burst', panels: 7 },
 };
 
 /** Deterministic pseudo-random stream from a seed, so skylines are stable per panel. */
@@ -62,10 +66,29 @@ export function seeded(seed) {
   };
 }
 
+/** Where a ray from (cx, cy) at angle `rad` (screen coords, y down) hits the canvas rect. */
+function rayHit(cx, cy, rad, w, h) {
+  const dx = Math.cos(rad);
+  const dy = Math.sin(rad);
+  let t = Infinity;
+  if (dx > 1e-9) t = Math.min(t, (w - cx) / dx);
+  if (dx < -1e-9) t = Math.min(t, (0 - cx) / dx);
+  if (dy > 1e-9) t = Math.min(t, (h - cy) / dy);
+  if (dy < -1e-9) t = Math.min(t, (0 - cy) / dy);
+  return [cx + dx * t, cy + dy * t];
+}
+
+function normAngle(a) {
+  const twoPi = Math.PI * 2;
+  return ((a % twoPi) + twoPi) % twoPi;
+}
+
 /**
  * Panel polygons for a layout, as fractions of the canvas. Each panel is
- * { poly: [[fx, fy], ...], rect: {x, y, w, h} } where rect is the bounding box
+ * { poly: [[x, y], ...], rect: {x, y, w, h} } where rect is the bounding box
  * the photo cover-fits into. Order is draw order (later panels overlap earlier).
+ * The burst layout is a central hexagon hub (drawn last) with six wedges radiating
+ * out to the canvas edges, one wedge per 60-degree sector.
  */
 export function layoutPanels(layout, w, h) {
   const P = (fracs) => {
@@ -105,12 +128,58 @@ export function layoutPanels(layout, w, h) {
         P([[0.52, 0.55], [1, 0.55], [1, 1], [0.52, 1]]),
       ];
     case 'triptych': // middle panel taller than its neighbours
-    default:
       return [
         P([[0, 0.07], [0.33, 0.07], [0.33, 0.93], [0, 0.93]]),
         P([[0.33, 0], [0.67, 0], [0.67, 1], [0.33, 1]]),
         P([[0.67, 0.07], [1, 0.07], [1, 0.93], [0.67, 0.93]]),
       ];
+    case 'burst': {
+      // Central hexagon hub + six wedges, one per 60-degree sector.
+      const cx = w * 0.5;
+      const cy = h * 0.46;
+      const rx = w * 0.27;
+      const ry = h * 0.235;
+      const hex = (deg) => {
+        const a = (deg * Math.PI) / 180;
+        return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)];
+      };
+      const corners = [[0, 0], [w, 0], [w, h], [0, h]];
+      const panels = [];
+      for (let k = 0; k < 6; k++) {
+        const a0 = (k * 60 * Math.PI) / 180;
+        const a1 = ((k + 1) * 60 * Math.PI) / 180;
+        const b0 = rayHit(cx, cy, a0, w, h);
+        const b1 = rayHit(cx, cy, a1, w, h);
+        // Rectangle corners whose angle from the hub falls strictly inside the sector.
+        const inside = corners
+          .map((c) => ({ c, a: normAngle(Math.atan2(c[1] - cy, c[0] - cx)) }))
+          .filter(({ a }) => {
+            const rel = normAngle(a - a0);
+            return rel > 0.001 && rel < normAngle(a1 - a0) - 0.001;
+          })
+          .sort((p, q) => normAngle(p.a - a0) - normAngle(q.a - a0))
+          .map(({ c }) => c);
+        const poly = [b0, ...inside, b1, hex((k + 1) * 60), hex(k * 60)];
+        const xs = poly.map((p) => p[0]);
+        const ys = poly.map((p) => p[1]);
+        const x = Math.min(...xs);
+        const y = Math.min(...ys);
+        panels.push({ poly, rect: { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y } });
+      }
+      // The hub, drawn last so its neon ring sits on top of the wedge seams.
+      const hubPoly = [0, 60, 120, 180, 240, 300].map((d) => hex(d));
+      const hx = hubPoly.map((p) => p[0]);
+      const hy = hubPoly.map((p) => p[1]);
+      const hx0 = Math.min(...hx);
+      const hy0 = Math.min(...hy);
+      panels.push({
+        poly: hubPoly,
+        rect: { x: hx0, y: hy0, w: Math.max(...hx) - hx0, h: Math.max(...hy) - hy0 },
+      });
+      return panels;
+    }
+    default:
+      return [P([[0, 0], [1, 0], [1, 1], [0, 1]])];
   }
 }
 
@@ -135,17 +204,11 @@ function clampPan(rect, dw, dh, ox, oy) {
   };
 }
 
-/** Draws one photo into its panel rectangle, cover-fit, zoomed, panned, flippable. */
+/** Draws one photo into its panel rectangle: cover-fit, or whole-photo over a sky wash. */
 function drawPhoto(ctx, rect, panel, grade) {
   const img = panel.img;
   if (!img) return;
   const zoom = panel.zoom || 1;
-  const base = Math.max(rect.w / img.naturalWidth, rect.h / img.naturalHeight) * zoom;
-  const dw = img.naturalWidth * base;
-  const dh = img.naturalHeight * base;
-  const { ox, oy } = clampPan(rect, dw, dh, panel.ox || 0, panel.oy || 0);
-  const dx = rect.x + (rect.w - dw) / 2 + ox;
-  const dy = rect.y + (rect.h - dh) / 2 + oy;
   ctx.save();
   if (grade.mono) ctx.filter = 'grayscale(1) contrast(1.12) brightness(1.06)';
   if (panel.flip) {
@@ -153,7 +216,31 @@ function drawPhoto(ctx, rect, panel, grade) {
     ctx.scale(-1, 1);
     ctx.translate(-(rect.x + rect.w / 2), 0);
   }
-  ctx.drawImage(img, dx, dy, dw, dh);
+  if (panel.fit === 'whole') {
+    // Show the entire photo, centred on a sky wash, with a soft dark edge.
+    const sky = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.h);
+    sky.addColorStop(0, grade.sky[0]);
+    sky.addColorStop(1, grade.sky[2]);
+    ctx.fillStyle = sky;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    const base = Math.min(rect.w / img.naturalWidth, rect.h / img.naturalHeight) * 0.96 * zoom;
+    const dw = img.naturalWidth * base;
+    const dh = img.naturalHeight * base;
+    const dx = rect.x + (rect.w - dw) / 2;
+    const dy = rect.y + (rect.h - dh) / 2;
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = Math.max(8, rect.w * 0.03);
+    ctx.shadowOffsetY = Math.max(4, rect.h * 0.01);
+    ctx.drawImage(img, dx, dy, dw, dh);
+  } else {
+    const base = Math.max(rect.w / img.naturalWidth, rect.h / img.naturalHeight) * zoom;
+    const dw = img.naturalWidth * base;
+    const dh = img.naturalHeight * base;
+    const { ox, oy } = clampPan(rect, dw, dh, panel.ox || 0, panel.oy || 0);
+    const dx = rect.x + (rect.w - dw) / 2 + ox;
+    const dy = rect.y + (rect.h - dh) / 2 + oy;
+    ctx.drawImage(img, dx, dy, dw, dh);
+  }
   ctx.restore();
 }
 
@@ -251,6 +338,22 @@ function drawSkyline(ctx, rect, seed, grade) {
   }
 }
 
+/** Faint stars for noir skies — deterministic, so the panel is stable. */
+function drawStars(ctx, rect, seed) {
+  const rand = seeded(seed);
+  ctx.save();
+  for (let i = 0; i < 26; i++) {
+    const x = rect.x + rand() * rect.w;
+    const y = rect.y + rand() * rect.h * 0.6;
+    const r = 0.8 + rand() * 1.8;
+    ctx.fillStyle = `rgba(255,255,255,${0.25 + rand() * 0.55})`;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 /** Gradient sky + sun + skyline + palms: only ever painted into an EMPTY panel. */
 function drawSkyPanel(ctx, panel, rect, grade, seed) {
   const sky = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.h);
@@ -259,6 +362,7 @@ function drawSkyPanel(ctx, panel, rect, grade, seed) {
   sky.addColorStop(1, grade.sky[2]);
   ctx.fillStyle = sky;
   ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  if (grade.mono) drawStars(ctx, rect, seed + 7);
   const r = Math.min(rect.w, rect.h) * 0.20;
   drawSun(ctx, rect.x + rect.w * 0.68, rect.y + rect.h * 0.30, r, grade);
   drawSkyline(ctx, rect, seed, grade);
@@ -387,16 +491,13 @@ function drawType(ctx, w, h, state, grade) {
     ctx.rotate(rotate);
     ctx.textAlign = align;
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
-    ctx.shadowBlur = size * 0.18;
-    ctx.shadowOffsetY = size * 0.04;
     if (pos === 'diagonal') {
       // Slanted accent ribbon behind the title — a real poster device.
       const tw = ctx.measureText(title).width;
-      ctx.fillStyle = grade.accent;
       ctx.shadowColor = 'rgba(0,0,0,0.45)';
       ctx.shadowBlur = size * 0.22;
       ctx.shadowOffsetY = size * 0.06;
+      ctx.fillStyle = grade.accent;
       ctx.fillRect(-size * 0.55, -size * 0.62, tw + size * 1.1, size * 1.24);
       ctx.shadowColor = 'rgba(0,0,0,0)';
       ctx.shadowBlur = 0;
@@ -404,6 +505,19 @@ function drawType(ctx, w, h, state, grade) {
       ctx.fillStyle = dark;
       ctx.fillText(title, 0, size * 0.02);
     } else {
+      // First pass: an accent-coloured neon glow behind the letters, so the title
+      // lifts off busy photos even where the outline alone would not.
+      ctx.save();
+      ctx.shadowColor = grade.accent;
+      ctx.shadowBlur = size * 0.30;
+      ctx.shadowOffsetY = 0;
+      ctx.fillStyle = state.captionColor || grade.caption;
+      ctx.fillText(title, 0, 0);
+      ctx.restore();
+      // Second pass: dark outline + drop shadow + crisp fill.
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = size * 0.18;
+      ctx.shadowOffsetY = size * 0.04;
       if (state.outline !== false) {
         ctx.lineJoin = 'round';
         ctx.strokeStyle = grade.captionStroke;
@@ -470,7 +584,7 @@ function drawType(ctx, w, h, state, grade) {
 
 /**
  * Draws the whole cover onto `canvas` from `state`:
- * { panels: [{img, zoom, ox, oy, flip, grade}], layout, grade, caption, subtitle,
+ * { panels: [{img, zoom, ox, oy, flip, fit, grade}], layout, grade, caption, subtitle,
  *   tagline, titlePos, titleScale, captionColor, outline, badge, grain }
  */
 export function drawCover(canvas, state) {
@@ -523,6 +637,19 @@ export function drawCover(canvas, state) {
     ctx.stroke();
     ctx.restore();
   });
+  // Burst hub ring: a thin neon ring just inside the hub edge, so the hub reads as
+  // a medallion rather than one more slice.
+  if (state.layout === 'burst') {
+    const hub = panels[panels.length - 1];
+    ctx.save();
+    tracePoly(ctx, hub.poly);
+    ctx.strokeStyle = grade.accent;
+    ctx.lineWidth = Math.max(2, Math.round(Math.min(w, h) * 0.003));
+    ctx.shadowColor = grade.accent;
+    ctx.shadowBlur = Math.max(8, Math.round(Math.min(w, h) * 0.016));
+    ctx.stroke();
+    ctx.restore();
+  }
   // Film grain (before type, so the letters stay razor sharp), then vignette.
   if (state.grain !== false) {
     ctx.save();
