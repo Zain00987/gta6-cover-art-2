@@ -1,132 +1,96 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Neon Heist Canvas — GTA-style cover art maker</title>
-<link rel="icon" href="data:,">
-<link rel="stylesheet" href="./style.css">
+<title>Neon Heist Canvas — GTA 6-style cover art studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%2310182b' stroke='%23ffc46b' stroke-width='3'/%3E%3Ctext x='32' y='42' font-family='Arial Black' font-size='26' font-weight='900' fill='white' text-anchor='middle'%3EVI%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="brand">
-  <div>
-    <h1>NEON HEIST CANVAS</h1>
-    <p>Turn your photos into poster-style cover art — diagonal panels, a radial burst with a sun medallion, sunset skies over the bay, neon piping. Everything runs on your machine — no uploads.</p>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">VI</span>
+    <div>
+      <h1>Neon Heist Canvas</h1>
+      <p class="tagline">Turn any photo into GTA 6-style cover art — offline, in your browser.</p>
+    </div>
   </div>
-  <span class="badge">OFFLINE · PNG EXPORT</span>
+  <div class="top-actions">
+    <button id="surpriseBtn" type="button" class="btn accent">🎲 Surprise me</button>
+  </div>
 </header>
-<main class="editor">
-  <aside class="controls">
+
+<main class="studio">
+  <aside class="panel" aria-label="Poster controls">
     <section>
-      <h2>1 · Photos</h2>
-      <label class="file">Add photos from your machine
-        <input id="photos" type="file" accept="image/*" multiple>
-      </label>
-      <button id="samples" type="button">Use the three sample photos</button>
-      <button id="surprise" type="button" class="lucky">🎲 Surprise me — random poster</button>
-      <div id="thumbs" class="thumbs" aria-label="Loaded photos"></div>
-      <p class="hint">Click a thumbnail to put it in the selected panel. Drag the preview to pan a photo.</p>
+      <h2>Layout</h2>
+      <p class="hint">Seven data-driven layouts. Pick one — the poster re-draws itself.</p>
+      <div id="layoutGrid" class="pick-grid"></div>
     </section>
+
     <section>
-      <h2>2 · Layout</h2>
-      <div id="layoutBtns" class="btnrow">
-        <button type="button" data-value="solo">Solo</button>
-        <button type="button" data-value="slant">Diagonal duo</button>
-        <button type="button" data-value="hero">Hero slant</button>
-        <button type="button" data-value="strips">Offset strips</button>
-        <button type="button" data-value="quad">Staggered quad</button>
-        <button type="button" data-value="triptych">Triptych</button>
-        <button type="button" data-value="burst">Radial burst</button>
-        <button type="button" data-value="chevron">Chevron</button>
-      </div>
+      <h2>Colour grade</h2>
+      <div id="gradeGrid" class="pick-grid"></div>
     </section>
+
     <section>
-      <h2>3 · Selected panel</h2>
-      <div id="panelBtns" class="btnrow"></div>
-      <label>Photo in this panel
-        <select id="panelPhoto"></select>
+      <h2>Words</h2>
+      <label class="field">Title
+        <input id="titleInput" type="text" maxlength="40" autocomplete="off">
       </label>
-      <label>Grade for this panel
-        <select id="panelGrade"></select>
+      <label class="field">Subtitle ribbon
+        <input id="subtitleInput" type="text" maxlength="48" autocomplete="off">
       </label>
-      <label>Zoom <span id="zoomVal">1.0x</span>
-        <input id="zoom" type="range" min="1" max="3" step="0.05" value="1">
+      <label class="field">Tagline
+        <input id="taglineInput" type="text" maxlength="64" autocomplete="off">
       </label>
-      <label>Photo anchor — which part of the photo the crop keeps
-        <span id="anchorBtns" class="btnrow">
-          <button type="button" data-value="top">Top (faces)</button>
-          <button type="button" data-value="center">Centre</button>
-          <button type="button" data-value="bottom">Bottom</button>
-        </span>
-      </label>
-      <div class="btnrow">
-        <button id="flip" type="button">Flip photo</button>
-        <button id="fit" type="button">Fit: fill panel</button>
-        <button id="pop" type="button">Colour pop: on</button>
-        <button id="recenter" type="button">Center photo</button>
+      <div class="row">
+        <label class="field grow">Title size
+          <input id="titleSize" type="range" min="0.7" max="1.4" step="0.05" value="1">
+        </label>
+        <div class="field">Title colour
+          <div id="titleColors" class="swatches"></div>
+        </div>
       </div>
+      <label class="check"><input id="badgeToggle" type="checkbox" checked> Stamp badge (VI · Leonida)</label>
+      <label class="check"><input id="scanToggle" type="checkbox"> Retro scanlines</label>
+      <label class="check"><input id="grainToggle" type="checkbox" checked> Vignette</label>
     </section>
+
     <section>
-      <h2>4 · Type</h2>
-      <label>Title
-        <input id="caption" type="text" maxlength="48" value="SUNBURST HEIST">
+      <h2>Photos</h2>
+      <p class="hint">Tap a sample to make it the hero photo, or add your own — they never leave this machine.</p>
+      <div id="sampleRow" class="thumbs"></div>
+      <label class="btn ghost file-btn">Add your photos…
+        <input id="photoUpload" type="file" accept="image/*" multiple hidden>
       </label>
-      <label>Subtitle ribbon
-        <input id="subtitle" type="text" maxlength="48" value="VICE CITY · EST. 2026">
-      </label>
-      <label>Tagline
-        <input id="tagline" type="text" maxlength="60" value="EVERY RAY A GETAWAY">
-      </label>
-      <label>Title size <span id="capSizeVal">100%</span>
-        <input id="capSize" type="range" min="0.6" max="1.6" step="0.05" value="1">
-      </label>
-      <div id="posBtns" class="btnrow">
-        <button type="button" data-value="bottom">Title at bottom</button>
-        <button type="button" data-value="top">Title at top</button>
-        <button type="button" data-value="diagonal">Diagonal ribbon</button>
-      </div>
-      <div id="colorBtns" class="btnrow swatches" aria-label="Title colour">
-        <button type="button" data-value="#fff7d6" style="background:#fff7d6" aria-label="Cream"></button>
-        <button type="button" data-value="#ffffff" style="background:#ffffff" aria-label="White"></button>
-        <button type="button" data-value="#ffd166" style="background:#ffd166" aria-label="Gold"></button>
-        <button type="button" data-value="#ff5c9e" style="background:#ff5c9e" aria-label="Pink"></button>
-        <button type="button" data-value="#00f0ff" style="background:#00f0ff" aria-label="Cyan"></button>
-        <button type="button" data-value="#111111" style="background:#111111" aria-label="Black"></button>
-      </div>
-      <label class="check"><input id="outline" type="checkbox" checked> Bold outline around the title</label>
-      <label class="check"><input id="badge" type="checkbox" checked> “Vice City · Leonida” stamp badge</label>
-      <label class="check"><input id="grain" type="checkbox" checked> Film grain (printed-poster feel)</label>
-      <label class="check"><input id="scanlines" type="checkbox"> Retro scanlines</label>
     </section>
+
     <section>
-      <h2>5 · Colour grade</h2>
-      <div id="gradeBtns" class="btnrow">
-        <button type="button" data-value="sunset">Sunset</button>
-        <button type="button" data-value="neon">Neon</button>
-        <button type="button" data-value="vice">Vice City</button>
-        <button type="button" data-value="miami">Miami</button>
-        <button type="button" data-value="noir">Noir</button>
-      </div>
+      <h2>Panels</h2>
+      <p class="hint">Each photo panel has its own fit, anchor, zoom and grade. Drag a photo on the poster to pan it.</p>
+      <div id="panelList"></div>
     </section>
+
     <section>
-      <h2>6 · Export size</h2>
-      <div id="sizeBtns" class="btnrow">
-        <button type="button" data-value="1080x1080">1080 × 1080</button>
-        <button type="button" data-value="1080x1350">1080 × 1350</button>
-        <button type="button" data-value="1080x1920">1080 × 1920 story</button>
-        <button type="button" data-value="1920x1080">1920 × 1080</button>
+      <h2>Export</h2>
+      <div id="sizeBtns" class="pick-grid"></div>
+      <div class="export-row">
+        <button id="exportBtn" type="button" class="btn accent">Export PNG</button>
+        <button id="copyBtn" type="button" class="btn">Copy PNG</button>
       </div>
-      <button id="export" type="button" class="primary">Export PNG</button>
-      <button id="copyPng" type="button">Copy PNG to clipboard</button>
-      <button id="exportAll" type="button">Export all 4 sizes</button>
-      <p id="status" role="status"></p>
+      <button id="exportAllBtn" type="button" class="btn wide">Export all 4 sizes</button>
+      <p id="status" class="status" role="status">Ready.</p>
     </section>
   </aside>
-  <section class="preview">
-    <canvas id="cover" width="1080" height="1080" aria-label="Live cover preview"></canvas>
-    <p class="hint">Live preview — drag a panel to move its photo. Click a panel to select it.</p>
+
+  <section class="stage-wrap" aria-label="Poster preview">
+    <div id="stage" class="stage"></div>
+    <p class="stage-hint">Drag any photo to pan it · the poster above is the live SVG that gets exported.</p>
   </section>
 </main>
-<script type="module" src="./src/main.js"></script>
+
+<script type="module" src="src/scenes.js"></script>
 </body>
 </html>
