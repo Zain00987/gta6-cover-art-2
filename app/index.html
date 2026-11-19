@@ -11,7 +11,7 @@
 <header class="brand">
   <div>
     <h1>NEON HEIST CANVAS</h1>
-    <p>Turn your photos into poster-style cover art — diagonal panels, sunset skies, neon piping. Everything runs on your machine — no uploads.</p>
+    <p>Turn your photos into poster-style cover art — diagonal panels, a radial burst, sunset skies, neon piping. Everything runs on your machine — no uploads.</p>
   </div>
   <span class="badge">OFFLINE · PNG EXPORT</span>
 </header>
@@ -36,6 +36,7 @@
         <button type="button" data-value="strips">Offset strips</button>
         <button type="button" data-value="quad">Staggered quad</button>
         <button type="button" data-value="triptych">Triptych</button>
+        <button type="button" data-value="burst">Radial burst</button>
       </div>
     </section>
     <section>
@@ -52,19 +53,20 @@
       </label>
       <div class="btnrow">
         <button id="flip" type="button">Flip photo</button>
+        <button id="fit" type="button">Fit: fill panel</button>
         <button id="recenter" type="button">Center photo</button>
       </div>
     </section>
     <section>
       <h2>4 · Type</h2>
       <label>Title
-        <input id="caption" type="text" maxlength="48" value="NEON HEIST">
+        <input id="caption" type="text" maxlength="48" value="SUNBURST HEIST">
       </label>
       <label>Subtitle ribbon
-        <input id="subtitle" type="text" maxlength="48" value="LEONIDA · 2026">
+        <input id="subtitle" type="text" maxlength="48" value="VICE CITY · EST. 2026">
       </label>
       <label>Tagline
-        <input id="tagline" type="text" maxlength="60" value="STEAL THE SUNSET">
+        <input id="tagline" type="text" maxlength="60" value="EVERY RAY A GETAWAY">
       </label>
       <label>Title size <span id="capSizeVal">100%</span>
         <input id="capSize" type="range" min="0.6" max="1.6" step="0.05" value="1">
@@ -105,6 +107,7 @@
         <button type="button" data-value="1920x1080">1920 × 1080</button>
       </div>
       <button id="export" type="button" class="primary">Export PNG</button>
+      <button id="exportAll" type="button">Export all 4 sizes</button>
       <p id="status" role="status"></p>
     </section>
   </aside>
