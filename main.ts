@@ -3,16 +3,18 @@
 // loads offline (app/index.html and its ES modules, no library and no network request),
 // and the program hands it in. It copies app/ and screenshots/ from beside this file
 // to /output and writes /output/dossier.json, the summary the judge reads, with the
-// vendored make.fun library. The cover art itself: a GTA-style poster maker with seven
+// vendored make.fun library. The cover art itself: a GTA-style poster maker with eight
 // polygon layouts (solo, diagonal duo, hero slant, offset strips, staggered quad,
-// triptych, and a new radial burst with a hexagon hub), per-panel colour grades and
-// fit modes, a code-drawn Vice City sunset backdrop (gradient sky, striped sun, palm
+// triptych, a radial burst with a sun-medallion hub, and a new chevron band), per-panel
+// colour grades, fit modes and photo anchors, a code-drawn Vice City sunset backdrop
+// (gradient sky, clouds, striped sun, a bay with a sun reflection, skyline and palm
 // silhouettes, noir stars — no game artwork, logo or font), multi-zone typography
-// (title with neon glow + outline, subtitle ribbon, tagline on a dark pill, stamp
-// badge that follows the title), film grain and halftone, exporting PNG at 1080x1080,
-// 1080x1350, 1080x1920 and 1920x1080. Its two sample photos (app/samples/) were made
-// for make.fun with an image model and are free to use. Put your 3 or 4 PNG or JPEG
-// screenshots in screenshots/ (the first by name is the cover) and run it.
+// (title with a neon echo, glow and outline, subtitle ribbon, tagline on a dark pill,
+// stamp badge that follows the title), film grain, halftone and optional scanlines,
+// exporting PNG at 1080x1080, 1080x1350, 1080x1920 and 1920x1080. Its three sample
+// photos (app/samples/) were made for make.fun with an image model and are free to
+// use. Put your 3 or 4 PNG or JPEG screenshots in screenshots/ (the first by name is
+// the cover) and run it.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
@@ -36,9 +38,11 @@ const out = isAbsolute(outRaw) ? outRaw : resolve(process.cwd(), outRaw);
 if (resolve(out) === resolve(here)) throw new Error('MAKEFUN_OUTPUT_DIR must not be the repository root');
 if (!existsSync(join(here, 'app', 'index.html'))) throw new Error('app/index.html is missing from the repository');
 if (!existsSync(join(here, 'vendor', 'makefun-app.ts'))) throw new Error('vendor/makefun-app.ts is missing from the repository');
+if (!existsSync(join(here, 'app', 'fonts', 'Anton-Regular.ttf'))) throw new Error('app/fonts/Anton-Regular.ttf is missing from the repository');
 
 // Pre-flight caps, checked before any copying: the scorer refuses an entry with
-// more than 993 files or 48 MiB under app/, and it needs 3-4 screenshots.
+// more than 993 files or 48 MiB under app/, and it needs 3-4 screenshots, each an
+// image file. Failing here is louder and cheaper than a refused entry later.
 let appFiles = 0;
 let appBytes = 0;
 const walk = (dir: string) => {
@@ -54,6 +58,9 @@ if (appFiles > 993) throw new Error(`app/ has ${appFiles} files, over the 993 ca
 if (appBytes > 50331648) throw new Error(`app/ is ${appBytes} bytes, over the 48 MiB cap`);
 const shots = existsSync(join(here, 'screenshots')) ? readdirSync(join(here, 'screenshots')) : [];
 if (shots.length < 3 || shots.length > 4) throw new Error(`screenshots/ has ${shots.length} files, need 3 or 4`);
+for (const name of shots) {
+  if (!/\.(png|jpe?g)$/i.test(name)) throw new Error(`screenshot ${name} is not a PNG or JPEG`);
+}
 
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'app'), join(out, 'app'), { recursive: true });
