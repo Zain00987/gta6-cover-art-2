@@ -1,22 +1,24 @@
-// Neon Heist Canvas — a working gta6-cover-art-01 entry (Node 22, standard library
+// Neon Heist Canvas — a rebuilt gta6-cover-art-01 entry (Node 22, standard library
 // only): the app is this directory's app/ folder, plain static files a desktop browser
 // loads offline (app/index.html and its ES modules, no library and no network request),
 // and the program hands it in. It copies app/ and screenshots/ from beside this file
 // to /output and writes /output/dossier.json, the summary the judge reads, with the
-// vendored make.fun library. The cover art itself: a GTA-style poster maker with six
-// diagonal/offset layouts, per-panel colour grades, a code-drawn Vice City sunset
-// backdrop (gradient sky, striped sun, palm silhouettes — no game artwork, logo or
-// font), multi-zone typography (title + subtitle ribbon + tagline + stamp badge),
-// film grain and halftone, exporting PNG at 1080x1080, 1080x1350, 1080x1920 and
-// 1920x1080. Its two sample photos (app/samples/) were made for make.fun with an image
-// model and are free to use. Put your 3 or 4 PNG or JPEG screenshots in screenshots/
-// (the first by name is the cover) and run it.
+// vendored make.fun library. The cover art itself: a GTA-style poster maker with seven
+// polygon layouts (solo, diagonal duo, hero slant, offset strips, staggered quad,
+// triptych, and a new radial burst with a hexagon hub), per-panel colour grades and
+// fit modes, a code-drawn Vice City sunset backdrop (gradient sky, striped sun, palm
+// silhouettes, noir stars — no game artwork, logo or font), multi-zone typography
+// (title with neon glow + outline, subtitle ribbon, tagline on a dark pill, stamp
+// badge that follows the title), film grain and halftone, exporting PNG at 1080x1080,
+// 1080x1350, 1080x1920 and 1920x1080. Its two sample photos (app/samples/) were made
+// for make.fun with an image model and are free to use. Put your 3 or 4 PNG or JPEG
+// screenshots in screenshots/ (the first by name is the cover) and run it.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-app.ts';
@@ -34,6 +36,24 @@ const out = isAbsolute(outRaw) ? outRaw : resolve(process.cwd(), outRaw);
 if (resolve(out) === resolve(here)) throw new Error('MAKEFUN_OUTPUT_DIR must not be the repository root');
 if (!existsSync(join(here, 'app', 'index.html'))) throw new Error('app/index.html is missing from the repository');
 if (!existsSync(join(here, 'vendor', 'makefun-app.ts'))) throw new Error('vendor/makefun-app.ts is missing from the repository');
+
+// Pre-flight caps, checked before any copying: the scorer refuses an entry with
+// more than 993 files or 48 MiB under app/, and it needs 3-4 screenshots.
+let appFiles = 0;
+let appBytes = 0;
+const walk = (dir: string) => {
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    const s = statSync(p);
+    if (s.isDirectory()) walk(p);
+    else { appFiles += 1; appBytes += s.size; }
+  }
+};
+walk(join(here, 'app'));
+if (appFiles > 993) throw new Error(`app/ has ${appFiles} files, over the 993 cap`);
+if (appBytes > 50331648) throw new Error(`app/ is ${appBytes} bytes, over the 48 MiB cap`);
+const shots = existsSync(join(here, 'screenshots')) ? readdirSync(join(here, 'screenshots')) : [];
+if (shots.length < 3 || shots.length > 4) throw new Error(`screenshots/ has ${shots.length} files, need 3 or 4`);
 
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'app'), join(out, 'app'), { recursive: true });
@@ -54,3 +74,13 @@ writeFileSync(
     app_path_max_bytes: 1000,
   }),
 );
+
+// Post-copy check: the dossier must exist and be non-empty, and every screenshot we
+// copied must be within the scorer's size cap — otherwise the entry would be refused
+// after all this work, so fail here instead of silently handing in a broken /output.
+const dossier = statSync(join(out, 'dossier.json'));
+if (dossier.size === 0) throw new Error('dossier.json was written empty');
+for (const name of readdirSync(join(out, 'screenshots'))) {
+  const size = statSync(join(out, 'screenshots', name)).size;
+  if (size > 262144) throw new Error(`screenshot ${name} is ${size} bytes, over the 256 KiB cap`);
+}
