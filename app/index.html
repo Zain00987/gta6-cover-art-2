@@ -1,96 +1,67 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Neon Heist Canvas — GTA 6-style cover art studio</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%2310182b' stroke='%23ffc46b' stroke-width='3'/%3E%3Ctext x='32' y='42' font-family='Arial Black' font-size='26' font-weight='900' fill='white' text-anchor='middle'%3EVI%3C/text%3E%3C/svg%3E">
+<title>Neon Heist Canvas — GTA 6-style cover art maker</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="topbar">
+<header>
   <div class="brand">
-    <span class="brand-mark">VI</span>
-    <div>
-      <h1>Neon Heist Canvas</h1>
-      <p class="tagline">Turn any photo into GTA 6-style cover art — offline, in your browser.</p>
-    </div>
+    <h1>NEON HEIST <span>CANVAS</span></h1>
+    <p>Turn a photo and a caption into GTA 6-style cover art. Offline, in your browser.</p>
   </div>
-  <div class="top-actions">
-    <button id="surpriseBtn" type="button" class="btn accent">🎲 Surprise me</button>
-  </div>
+  <button id="surprise-btn" title="Random layout, caption, grades and photos">🎲 Surprise me</button>
 </header>
-
-<main class="studio">
-  <aside class="panel" aria-label="Poster controls">
+<main>
+  <aside id="controls">
     <section>
-      <h2>Layout</h2>
-      <p class="hint">Seven data-driven layouts. Pick one — the poster re-draws itself.</p>
-      <div id="layoutGrid" class="pick-grid"></div>
-    </section>
-
-    <section>
-      <h2>Colour grade</h2>
-      <div id="gradeGrid" class="pick-grid"></div>
-    </section>
-
-    <section>
-      <h2>Words</h2>
-      <label class="field">Title
-        <input id="titleInput" type="text" maxlength="40" autocomplete="off">
+      <h2>1 · Photo</h2>
+      <label class="upload-btn">Upload your photo
+        <input type="file" id="photo-upload" accept="image/*">
       </label>
-      <label class="field">Subtitle ribbon
-        <input id="subtitleInput" type="text" maxlength="48" autocomplete="off">
-      </label>
-      <label class="field">Tagline
-        <input id="taglineInput" type="text" maxlength="64" autocomplete="off">
-      </label>
-      <div class="row">
-        <label class="field grow">Title size
-          <input id="titleSize" type="range" min="0.7" max="1.4" step="0.05" value="1">
-        </label>
-        <div class="field">Title colour
-          <div id="titleColors" class="swatches"></div>
-        </div>
-      </div>
-      <label class="check"><input id="badgeToggle" type="checkbox" checked> Stamp badge (VI · Leonida)</label>
-      <label class="check"><input id="scanToggle" type="checkbox"> Retro scanlines</label>
-      <label class="check"><input id="grainToggle" type="checkbox" checked> Vignette</label>
+      <p class="hint">Or pick a sample — it goes into the selected panel. Your photos never leave your machine.</p>
+      <div id="sample-row" class="samples"></div>
     </section>
-
     <section>
-      <h2>Photos</h2>
-      <p class="hint">Tap a sample to make it the hero photo, or add your own — they never leave this machine.</p>
-      <div id="sampleRow" class="thumbs"></div>
-      <label class="btn ghost file-btn">Add your photos…
-        <input id="photoUpload" type="file" accept="image/*" multiple hidden>
+      <h2>2 · Caption</h2>
+      <label>Title
+        <input type="text" id="title-input" value="SUNSET HEIST" maxlength="24">
+      </label>
+      <label>Subtitle
+        <input type="text" id="subtitle-input" value="VICE CITY" maxlength="24">
       </label>
     </section>
-
     <section>
-      <h2>Panels</h2>
-      <p class="hint">Each photo panel has its own fit, anchor, zoom and grade. Drag a photo on the poster to pan it.</p>
-      <div id="panelList"></div>
+      <h2>3 · Layout</h2>
+      <div id="layout-row" class="chips"></div>
     </section>
-
     <section>
-      <h2>Export</h2>
-      <div id="sizeBtns" class="pick-grid"></div>
-      <div class="export-row">
-        <button id="exportBtn" type="button" class="btn accent">Export PNG</button>
-        <button id="copyBtn" type="button" class="btn">Copy PNG</button>
-      </div>
-      <button id="exportAllBtn" type="button" class="btn wide">Export all 4 sizes</button>
-      <p id="status" class="status" role="status">Ready.</p>
+      <h2>4 · Panel</h2>
+      <div id="panel-box"></div>
     </section>
   </aside>
 
-  <section class="stage-wrap" aria-label="Poster preview">
-    <div id="stage" class="stage"></div>
-    <p class="stage-hint">Drag any photo to pan it · the poster above is the live SVG that gets exported.</p>
+  <section id="stage">
+    <div id="poster-holder" aria-label="Live cover preview"></div>
+    <p id="status-line">Loading…</p>
   </section>
-</main>
 
-<script type="module" src="src/scenes.js"></script>
+  <aside id="export-panel">
+    <section>
+      <h2>5 · Export</h2>
+      <div id="size-row" class="chips vertical"></div>
+      <div class="export-buttons">
+        <button id="export-one">⬇ Export PNG</button>
+        <button id="export-all">⬇⬇ Batch — all 4 sizes</button>
+        <button id="copy-btn">📋 Copy PNG to clipboard</button>
+      </div>
+      <img id="export-preview" alt="Last exported cover preview">
+      <p class="hint">Exports are real PNGs at the size you picked — square, portrait, wide or big square.</p>
+    </section>
+  </aside>
+</main>
+<script type="module" src="src/studio.js"></script>
 </body>
 </html>
