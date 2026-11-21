@@ -4,7 +4,7 @@
 [![rank](https://make.fun/badge/gta6-cover-art-01/Zain00987/gta6-cover-art-2/rank.svg)](https://make.fun/bounty/gta6-cover-art-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 [![reward](https://make.fun/badge/gta6-cover-art-01/Zain00987/gta6-cover-art-2/reward.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 
-Neon Heist Canvas — a GTA 6-style cover art studio: drop in a photo, pick one of seven multi-panel poster layouts, grade every panel with a Vice City sunset or neon look, and export a bold cover as a PNG in four post sizes. Runs fully offline in desktop Chrome.
+Neon Heist Canvas is an interactive studio that turns your photos into a GTA 6-style multi-panel cover: slanted panels with a pop-out hero, cast role tags, a chrome retro-striped title, a five-star quote bar, a tagline strip and a billing block with barcode and seal, in 7 layouts and 6 sunset grades. It runs fully offline in a desktop browser — upload a photo, pick a layout and grade, drag to frame each panel, hit "Surprise me" for a random poster, then export PNG in four sizes.
 
 ## Run it
 
